@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="es"><head>
+	
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width"/>
+<meta name="builder" content="Stronglify"/>
+
+<title>Stronglify</title>
+<meta name="description" content="Genera páginas estáticas perfectas para SEO de manera masiva."/>
+<meta name="robots" content="index"/>
+<link rel="canonical" href="https://tudominio.com/"/><style>
+html{line-height:1.15;-webkit-text-size-adjust:100%}body{margin:0}main{display:block}h1{font-size:2em;margin:.67em 0}hr{box-sizing:content-box;height:0;overflow:visible}pre{font-family:monospace,monospace;font-size:1em}a{background-color:transparent}abbr[title]{border-bottom:none;text-decoration:underline;text-decoration:underline dotted}b,strong{font-weight:bolder}code,kbd,samp{font-family:monospace,monospace;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}img{border-style:none}button,input,optgroup,select,textarea{font-family:inherit;font-size:100%;line-height:1.15;margin:0}button,input{overflow:visible}button,select{text-transform:none}button,[type=button],[type=reset],[type=submit]{-webkit-appearance:button}button::-moz-focus-inner,[type=button]::-moz-focus-inner,[type=reset]::-moz-focus-inner,[type=submit]::-moz-focus-inner{border-style:none;padding:0}button:-moz-focusring,[type=button]:-moz-focusring,[type=reset]:-moz-focusring,[type=submit]:-moz-focusring{outline:1px dotted ButtonText}
+fieldset{padding:.35em .75em .625em}legend{box-sizing:border-box;color:inherit;display:table;max-width:100%;padding:0;white-space:normal}progress{vertical-align:baseline}textarea{overflow:auto}[type=checkbox],[type=radio]{box-sizing:border-box;padding:0}[type=number]::-webkit-inner-spin-button,[type=number]::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}[type=search]::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}details{display:block}summary{display:list-item}template{display:none}[hidden]{display:none}img{max-width:100%;height:auto}
+</style><style>
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#fff}
+body{
+  color:#000;
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+.esp{
+  min-height:100vh;min-height:100dvh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:40px 20px 56px;
+}
+.esp h1{
+  margin:0;font-size:clamp(3.2rem,15vw,8rem);line-height:.95;font-weight:800;letter-spacing:-.055em;
+}
+.lead{
+  margin:28px 0 0;max-width:19ch;font-size:clamp(1.35rem,5.2vw,2.25rem);line-height:1.18;
+  font-weight:650;letter-spacing:-.03em;text-wrap:balance;
+}
+.type{margin:26px 0 0;min-height:1.5em;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:450}
+.call{margin:6px 0 0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:700}
+.call span{
+  background:linear-gradient(#000,#000) no-repeat 0 100%/100% 2px;padding-bottom:3px;
+}
+.cta{
+  margin-top:36px;display:inline-flex;align-items:center;gap:.55em;
+  padding:15px 28px;border:2px solid #000;border-radius:999px;
+  color:#000;text-decoration:none;font-size:1.0625rem;font-weight:700;letter-spacing:-.01em;
+  background:linear-gradient(#000,#000) no-repeat 50% 100%/100% 0;
+  transition:background-size .28s cubic-bezier(.2,.7,.2,1),color .2s;
+}
+.cta:hover,.cta:focus-visible{background-size:100% 100%;color:#fff}
+.cta:focus-visible{outline:3px solid #000;outline-offset:4px}
+.arrow{display:inline-block;animation:nudge 1.6s ease-in-out infinite}
+.caret{
+  display:inline-block;width:2px;height:1.05em;margin-left:3px;background:#000;
+  vertical-align:-.16em;animation:blink 1s steps(1) infinite;
+}
+.ch,.wd{display:inline-block;white-space:pre}
+.js .ch{
+  opacity:0;
+  animation:rise .8s cubic-bezier(.2,.75,.2,1) both,wave 5s ease-in-out infinite;
+  animation-delay:calc(var(--i)*60ms),calc(1.6s + var(--i)*90ms);
+}
+.js .wd{opacity:0;animation:word .6s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(.75s + var(--i)*75ms)}
+.js .call{opacity:0;animation:fade .5s ease both;animation-delay:3.7s}
+.js .call span{background-size:0 2px;animation:underline .7s cubic-bezier(.2,.75,.2,1) both;animation-delay:4s}
+.js .cta{opacity:0;animation:word .6s cubic-bezier(.2,.75,.2,1) both;animation-delay:4.4s}
+@keyframes rise{
+  from{opacity:0;transform:translateY(.55em) rotate(7deg);filter:blur(8px)}
+  to{opacity:1;transform:none;filter:blur(0)}
+}
+@keyframes wave{0%,16%,100%{translate:0 0}8%{translate:0 -.07em}}
+@keyframes word{from{opacity:0;transform:translateY(.5em)}to{opacity:1;transform:none}}
+@keyframes fade{to{opacity:1}}
+@keyframes underline{to{background-size:100% 2px}}
+@keyframes blink{50%{opacity:0}}
+@keyframes nudge{0%,100%{transform:none}50%{transform:translateX(5px)}}
+@media (prefers-reduced-motion:reduce){
+  .js .ch,.js .wd,.js .call,.js .call span,.js .cta,.arrow,.caret{animation:none;opacity:1}
+  .js .call span{background-size:100% 2px}
+}
+</style><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
+<body>
+  <main class="esp">
+  <h1 id="brand">Stronglify</h1>
+  <p class="lead" id="lead">Genera páginas estáticas perfectas para SEO de manera masiva.</p>
+  <p class="type"><span id="type">Construye tu página web en minutos.</span><span class="caret" aria-hidden="true"></span></p>
+  <p class="call"><span>¡Regístrate y comienza a crear!</span></p>
+  <a class="cta" href="https://app.stronglify.com">Ir a la aplicación <span class="arrow" aria-hidden="true">→</span></a>
+</main><script>
+(function () {
+  var d = document, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  d.documentElement.className = 'js';
+  function split(el, byWord) {
+    var text = el.textContent, parts = byWord ? text.split(' ') : text.split('');
+    el.setAttribute('aria-label', text);
+    el.textContent = '';
+    parts.forEach(function (p, i) {
+      var s = d.createElement('span');
+      s.className = byWord ? 'wd' : 'ch';
+      s.setAttribute('aria-hidden', 'true');
+      s.style.setProperty('--i', i);
+      s.textContent = byWord && i < parts.length - 1 ? p + ' ' : p;
+      el.appendChild(s);
+    });
+  }
+  split(d.getElementById('brand'), false);
+  split(d.getElementById('lead'), true);
+  var t = d.getElementById('type'), full = t.textContent, n = 0;
+  if (still) return;
+  t.setAttribute('aria-label', full);
+  t.textContent = '';
+  setTimeout(function tick() {
+    t.textContent = full.slice(0, ++n);
+    if (n < full.length) setTimeout(tick, 34 + Math.random() * 40);
+  }, 2100);
+})();
+</script>
+</body></html>
