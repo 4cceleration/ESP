@@ -112,9 +112,12 @@ button{font-family:inherit}
   var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, atan2 = Math.atan2;
 
+  function hash(n) {
+    n = Math.imul(n + 7, 0x9E3779B1) >>> 0;
+    return ((n ^ (n >>> 13)) >>> 0) % NS;
+  }
   function pick(k) {            
-    var h = function (n) { n = (n * 2654435761) >>> 0; return (n ^ (n >>> 13)) % NS; };
-    var a = h(k), b = h(k - 1);
+    var a = hash(k), b = hash(k - 1);
     return a === b ? (a + 1) % NS : a;
   }
 
