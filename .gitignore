@@ -1,0 +1,6 @@
+device/config.py
+firmware/
+backup/
+docs/
+.DS_Store
+__pycache__/
