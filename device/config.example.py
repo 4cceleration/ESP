@@ -21,3 +21,8 @@ GITHUB_REPO = "4cceleration/ESP"
 GITHUB_BRANCH = "main"
 GITHUB_PAGE = "index.html"
 UPDATE_EVERY_S = 300
+
+# Relevo en Cloudflare para que el sitio se vea desde internet (carpeta relay/).
+# RELAY_KEY debe ser igual al secreto BOARD_KEY del Worker. Vacío = desactivado.
+RELAY_HOST = ""
+RELAY_KEY = ""

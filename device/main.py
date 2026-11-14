@@ -7,8 +7,12 @@
 # - Solo GET/HEAD y rutas fijas: lo que pide el cliente nunca toca el sistema de archivos.
 # - Un vigilante recoge basura cada 10 s y reinicia la placa si la memoria se agota.
 # - Cada pocos minutos consulta GitHub y, si hay un commit nuevo, baja la página.
+# - Mantiene una conexión saliente a un relevo en Cloudflare: por ahí le llegan las
+#   visitas de internet, sin abrir puertos en el router.
 import asyncio
+import binascii
 import gc
+import json
 import os
 import time
 
@@ -45,6 +49,7 @@ etag = b""
 page_size = 0
 wlan = None
 mode = ""
+blinking = False
 
 H_PAGE = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
           b"Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n"
@@ -52,10 +57,29 @@ H_PAGE = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
 H_304 = b"HTTP/1.1 304 Not Modified\r\nCache-Control: public, max-age=60\r\nConnection: close\r\n"
 H_JSON = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
           b"Cache-Control: no-store\r\nConnection: close\r\n")
+R_202 = b"HTTP/1.1 202 Accepted\r\nCache-Control: no-store\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 R_404 = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 R_405 = b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 R_400 = b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 R_503 = b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 2\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+
+
+async def blink():
+    """Hace titilar el LED de la placa unos segundos."""
+    global blinking
+    blinking = True
+    try:
+        for _ in range(16):
+            led.value(not led.value())
+            await asyncio.sleep_ms(110)
+    finally:
+        led.value(0)
+        blinking = False
+
+
+def start_blink():
+    if not blinking:
+        asyncio.create_task(blink())
 
 
 def read_text(path):
@@ -157,7 +181,13 @@ async def handle(reader, writer):
         path = parts[1].split(b"?")[0]
         requests_served += 1
 
-        if method not in (b"GET", b"HEAD"):
+        if path == b"/api/blink":
+            if method == b"POST":
+                start_blink()
+                writer.write(R_202)
+            else:
+                writer.write(R_405)
+        elif method not in (b"GET", b"HEAD"):
             writer.write(R_405)
         elif path in (b"/", b"/index.html"):
             if not page_size:
@@ -281,6 +311,117 @@ async def updater():
         await asyncio.sleep(config.UPDATE_EVERY_S)
 
 
+def ws_send(writer, op, payload):
+    """Escribe una trama WebSocket de cliente (máscara en ceros: no altera los datos)."""
+    n = len(payload)
+    if n < 126:
+        writer.write(bytes((0x80 | op, 0x80 | n, 0, 0, 0, 0)))
+    else:
+        writer.write(bytes((0x80 | op, 0xFE, n >> 8, n & 0xFF, 0, 0, 0, 0)))
+    writer.write(payload)
+
+
+async def ws_read(reader):
+    h = await reader.readexactly(2)
+    n = h[1] & 0x7F
+    if n == 126:
+        n = int.from_bytes(await reader.readexactly(2), "big")
+    if n > 512:
+        raise OSError("trama demasiado grande")
+    return h[0] & 0x0F, (await reader.readexactly(n) if n else b"")
+
+
+async def relay_request(writer, data):
+    """Atiende una orden del relevo: titilar o enviar la página."""
+    global requests_served
+    try:
+        m = json.loads(data)
+    except ValueError:
+        return
+    if m.get("cmd") == "blink":
+        start_blink()
+        return
+    rid = m.get("id")
+    if not isinstance(rid, int):
+        return
+    requests_served += 1
+    async with send_lock:
+        ws_send(writer, 1, b'{"id":%d,"status":%d,"gzip":true,"etag":%s}'
+                % (rid, 200 if page_size else 404, json.dumps(etag.decode()).encode()))
+        if page_size:
+            BUF[0] = (rid >> 24) & 0xFF
+            BUF[1] = (rid >> 16) & 0xFF
+            BUF[2] = (rid >> 8) & 0xFF
+            BUF[3] = rid & 0xFF
+            body = MV[4:]
+            with open(PAGE_GZ, "rb") as f:
+                while True:
+                    n = f.readinto(body)
+                    if not n:
+                        break
+                    ws_send(writer, 2, MV[:n + 4])
+                    await writer.drain()
+        ws_send(writer, 1, b'{"id":%d,"end":true}' % rid)
+        await writer.drain()
+
+
+async def relay_session():
+    import ssl
+    host = config.RELAY_HOST
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.verify_mode = ssl.CERT_NONE
+    reader, writer = await asyncio.wait_for(
+        asyncio.open_connection(host, 443, ssl=ctx, server_hostname=host), 20)
+    try:
+        writer.write(b"GET /_board HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\n"
+                     b"Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+                     b"Sec-WebSocket-Key: %s\r\nX-Board-Key: %s\r\n\r\n"
+                     % (host.encode(), binascii.b2a_base64(os.urandom(16)).strip(),
+                        config.RELAY_KEY.encode()))
+        await writer.drain()
+        head = await read_head(reader)
+        if not head or b" 101 " not in head[:16]:
+            raise OSError("el relevo rechazó la conexión: %s" % (head or b"")[:32])
+        print("relevo conectado:", host)
+        last = time.time()
+        while True:
+            try:
+                op, data = await asyncio.wait_for(ws_read(reader), 30)
+            except asyncio.TimeoutError:
+                if time.time() - last > 100:
+                    raise OSError("el relevo dejó de responder")
+                ws_send(writer, 1, b"ping")
+                await writer.drain()
+                continue
+            last = time.time()
+            if op == 8:
+                raise OSError("el relevo cerró la conexión")
+            if op == 9:
+                ws_send(writer, 10, data)
+                await writer.drain()
+            elif op == 1 and data != b"pong":
+                await relay_request(writer, data)
+    finally:
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception:
+            pass
+
+
+async def relay():
+    """Mantiene viva la conexión con el relevo; si se cae, reintenta."""
+    await asyncio.sleep(3)
+    while True:
+        if wlan.isconnected():
+            try:
+                await relay_session()
+            except Exception as e:
+                print("relevo:", repr(e))
+            gc.collect()
+        await asyncio.sleep(15)
+
+
 async def main():
     global wlan, mode
     wlan, mode = connect()
@@ -299,6 +440,8 @@ async def main():
     asyncio.create_task(housekeeper())
     if mode == "wifi" and config.GITHUB_REPO:
         asyncio.create_task(updater())
+    if mode == "wifi" and config.RELAY_HOST:
+        asyncio.create_task(relay())
     while True:
         await asyncio.sleep(3600)
 
