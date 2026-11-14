@@ -26,18 +26,21 @@ case "$1" in
     python3 -I "$ROOT/scripts/monitor.py" 115200 reset "${2:-10}"
     ;;
   upload)
-    # Sube el panel (config.py, main.py, www/) a la placa y la reinicia.
+    # Comprime site/index.html, sube todo a la placa y la reinicia mostrando el log.
+    [[ -f "$ROOT/device/config.py" ]] || { echo "Falta device/config.py (copia config.example.py)." >&2; exit 1; }
+    mkdir -p "$ROOT/device/www"
+    gzip -9 -n -c "$ROOT/site/index.html" > "$ROOT/device/www/index.html.gz"
     cd "$ROOT/device"
-    [[ -f config.py ]] || { echo "Falta device/config.py (copia config.example.py)." >&2; exit 1; }
     "$BIN/mpremote" connect "$PORT" mkdir :www 2>/dev/null || true
-    "$BIN/mpremote" connect "$PORT" cp config.py :config.py + cp www/index.html :www/index.html + cp main.py :main.py
+    "$BIN/mpremote" connect "$PORT" cp config.py :config.py + cp www/index.html.gz :www/index.html.gz + cp main.py :main.py
     python3 -I "$ROOT/scripts/monitor.py" 115200 reset "${2:-20}"
     ;;
   repl)
     "$BIN/mpremote" connect "$PORT" repl
     ;;
   preview)
-    python3 "$ROOT/scripts/preview.py"
+    # Vista previa de la página en el computador: http://localhost:8032/
+    python3 -m http.server 8032 --bind 127.0.0.1 --directory "$ROOT/site"
     ;;
   backup)
     out="${2:-$ROOT/backup/flash-$(date +%Y%m%d-%H%M%S).bin}"

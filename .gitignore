@@ -1,4 +1,5 @@
 device/config.py
+device/www/
 firmware/
 backup/
 docs/

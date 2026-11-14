@@ -1,46 +1,99 @@
-# Panel web servido desde el ESP32 (MicroPython).
-# Se conecta al Wi-Fi de config.py; si no puede, crea su propia red (modo AP).
+# Servidor web del ESP32 (MicroPython), pensado para gastar la menor RAM posible.
+#
+# - La página se guarda ya comprimida (www/index.html.gz) y se envía tal cual.
+# - Un único búfer de 1 KB, reservado al arrancar, sirve todos los envíos.
+# - Las cabeceras de respuesta son constantes: no se construyen por petición.
+# - Peticiones acotadas: 2 KB de cabeceras, 4 s de espera, 4 conexiones a la vez.
+# - Solo GET/HEAD y rutas fijas: lo que pide el cliente nunca toca el sistema de archivos.
+# - Un vigilante recoge basura cada 10 s y reinicia la placa si la memoria se agota.
+# - Cada pocos minutos consulta GitHub y, si hay un commit nuevo, baja la página.
 import asyncio
 import gc
-import json
 import os
 import time
 
-import esp
-import esp32
 import machine
+import micropython
 import network
 
 import config
+
+micropython.alloc_emergency_exception_buf(100)
+
+PAGE_GZ = "www/index.html.gz"
+PAGE_TMP = "www/index.tmp"
+SHA_FILE = "www/version.txt"
+
+MAX_CONN = 4          # conexiones simultáneas; el resto recibe 503
+MAX_HEAD = 2048       # bytes máximos de cabeceras por petición
+IO_TIMEOUT = 4        # segundos de espera por cliente
+LOW_MEM = 24000       # si queda menos RAM libre tras limpiar, se reinicia
+MAX_PAGE = 300000     # tamaño máximo aceptado al actualizar la página
+
+BUF = bytearray(1024)
+MV = memoryview(BUF)
+send_lock = asyncio.Lock()   # el búfer es único: un envío de archivo a la vez
 
 led = machine.Pin(config.LED_PIN, machine.Pin.OUT)
 led.value(0)
 
 START = time.time()
-state = {"mode": "", "ssid": "", "requests": 0}
+conns = 0
+requests_served = 0
+mem_min = gc.mem_free()
+etag = b""
+page_size = 0
 wlan = None
+mode = ""
+
+H_PAGE = (b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+          b"Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n"
+          b"Cache-Control: public, max-age=60\r\nConnection: close\r\n")
+H_304 = b"HTTP/1.1 304 Not Modified\r\nCache-Control: public, max-age=60\r\nConnection: close\r\n"
+H_JSON = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+          b"Cache-Control: no-store\r\nConnection: close\r\n")
+R_404 = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+R_405 = b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+R_400 = b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+R_503 = b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 2\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+
+
+def read_text(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def load_page_info():
+    """Recalcula tamaño y ETag de la página guardada."""
+    global etag, page_size
+    try:
+        page_size = os.stat(PAGE_GZ)[6]
+    except OSError:
+        page_size = 0
+    version = read_text(SHA_FILE)[:12] or "local"
+    etag = ('"%s-%d"' % (version, page_size)).encode()
 
 
 def connect():
-    """Devuelve (interfaz, modo). Intenta Wi-Fi y cae a punto de acceso propio."""
     try:
         network.hostname(config.HOSTNAME)
     except Exception:
         pass
-
+    ap = network.WLAN(network.AP_IF)
+    sta = network.WLAN(network.STA_IF)
     if config.WIFI_SSID:
-        sta = network.WLAN(network.STA_IF)
+        ap.active(False)            # el punto de acceso encendido cuesta RAM
         sta.active(True)
         sta.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
         for _ in range(config.WIFI_TIMEOUT_S * 4):
             if sta.isconnected():
-                state["ssid"] = config.WIFI_SSID
                 return sta, "wifi"
-            led.value(not led.value())  # parpadea mientras conecta
+            led.value(not led.value())
             time.sleep(0.25)
         sta.active(False)
-
-    ap = network.WLAN(network.AP_IF)
     ap.active(True)
     try:
         ap.config(ssid=config.AP_SSID, password=config.AP_PASSWORD,
@@ -48,125 +101,87 @@ def connect():
     except Exception:
         ap.config(essid=config.AP_SSID, password=config.AP_PASSWORD,
                   authmode=network.AUTH_WPA2_PSK)
-    state["ssid"] = config.AP_SSID
     return ap, "ap"
 
 
-def temperature_c():
-    try:
-        return round((esp32.raw_temperature() - 32) / 1.8, 1)
-    except Exception:
-        try:
-            return round(esp32.mcu_temperature(), 1)
-        except Exception:
+async def read_head(reader):
+    """Lee las cabeceras con tope de tamaño. Devuelve bytes o None si no son válidas."""
+    data = b""
+    while b"\r\n\r\n" not in data:
+        chunk = await asyncio.wait_for(reader.read(512), IO_TIMEOUT)
+        if not chunk:
+            break
+        data += chunk
+        if len(data) > MAX_HEAD:
             return None
+    return data
 
 
-def status():
-    gc.collect()
-    free = gc.mem_free()
-    rssi = None
-    if state["mode"] == "wifi":
-        try:
-            rssi = wlan.status("rssi")
-        except Exception:
-            pass
-    mac = ":".join("%02x" % b for b in wlan.config("mac"))
-    return {
-        "name": config.DEVICE_NAME,
-        "mode": state["mode"],
-        "ssid": state["ssid"],
-        "ip": wlan.ifconfig()[0],
-        "hostname": config.HOSTNAME,
-        "mac": mac,
-        "rssi": rssi,
-        "connected": wlan.isconnected() if state["mode"] == "wifi" else True,
-        "uptime_s": time.time() - START,
-        "mem_free": free,
-        "mem_total": free + gc.mem_alloc(),
-        "temp_c": temperature_c(),
-        "cpu_mhz": machine.freq() // 1000000,
-        "flash_mb": esp.flash_size() // (1024 * 1024),
-        "led": bool(led.value()),
-        "requests": state["requests"],
-        "micropython": os.uname().release,
-    }
-
-
-async def send(writer, code, ctype, body):
-    if isinstance(body, str):
-        body = body.encode()
-    writer.write(("HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n"
-                  "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
-                  % (code, ctype, len(body))).encode())
-    writer.write(body)
-    await writer.drain()
-
-
-async def send_json(writer, obj, code="200 OK"):
-    await send(writer, code, "application/json", json.dumps(obj))
-
-
-async def send_file(writer, path, ctype):
-    try:
-        size = os.stat(path)[6]
-    except OSError:
-        await send(writer, "404 Not Found", "text/plain", "No encontrado")
+async def send_page(writer, head_only):
+    writer.write(H_PAGE)
+    writer.write(b"ETag: " + etag + b"\r\nContent-Length: %d\r\n\r\n" % page_size)
+    if head_only:
+        await writer.drain()
         return
-    writer.write(("HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\n"
-                  "Connection: close\r\n\r\n" % (ctype, size)).encode())
-    buf = bytearray(1024)
-    with open(path, "rb") as f:
-        while True:
-            n = f.readinto(buf)
-            if not n:
-                break
-            writer.write(bytes(buf[:n]) if n < len(buf) else buf)
-            await writer.drain()
+    async with send_lock:
+        with open(PAGE_GZ, "rb") as f:
+            while True:
+                n = f.readinto(BUF)
+                if not n:
+                    break
+                writer.write(MV[:n])
+                await writer.drain()
 
 
 async def handle(reader, writer):
+    global conns, requests_served
+    conns += 1
     try:
-        line = await asyncio.wait_for(reader.readline(), 5)
-        parts = line.decode().split()
-        if len(parts) < 2:
+        if conns > MAX_CONN:
+            writer.write(R_503)
+            await writer.drain()
             return
-        method, path = parts[0], parts[1].split("?")[0]
+        data = await read_head(reader)
+        if not data:
+            if data is None:
+                writer.write(R_400)
+                await writer.drain()
+            return
+        end = data.find(b"\r\n")
+        parts = data[:end].split(b" ")
+        if len(parts) < 2:
+            writer.write(R_400)
+            await writer.drain()
+            return
+        method = parts[0]
+        path = parts[1].split(b"?")[0]
+        requests_served += 1
 
-        length = 0
-        while True:
-            h = await asyncio.wait_for(reader.readline(), 5)
-            if h in (b"\r\n", b"\n", b""):
-                break
-            if h.lower().startswith(b"content-length:"):
-                length = int(h.split(b":")[1])
-        body = b""
-        if 0 < length <= 512:
-            body = await asyncio.wait_for(reader.readexactly(length), 5)
-
-        state["requests"] += 1
-
-        if method == "GET" and path in ("/", "/index.html"):
-            await send_file(writer, "www/index.html", "text/html; charset=utf-8")
-        elif method == "GET" and path == "/api/status":
-            await send_json(writer, status())
-        elif method == "POST" and path == "/api/led":
-            try:
-                data = json.loads(body) if body else {}
-            except ValueError:
-                data = {}
-            if "on" in data:
-                led.value(1 if data["on"] else 0)
+        if method not in (b"GET", b"HEAD"):
+            writer.write(R_405)
+        elif path in (b"/", b"/index.html"):
+            if not page_size:
+                writer.write(R_404)
+            elif etag in data:          # If-None-Match coincide: nada que enviar
+                writer.write(H_304)
+                writer.write(b"ETag: " + etag + b"\r\n\r\n")
             else:
-                led.value(not led.value())
-            await send_json(writer, {"led": bool(led.value())})
-        elif method == "GET" and path == "/favicon.ico":
-            await send(writer, "204 No Content", "text/plain", "")
+                await send_page(writer, method == b"HEAD")
+        elif path == b"/api/status":
+            body = b'{"uptime_s":%d,"mem_free":%d,"mem_min":%d,"requests":%d,"version":"%s"}' % (
+                time.time() - START, gc.mem_free(), mem_min, requests_served,
+                read_text(SHA_FILE)[:12].encode() or b"local")
+            writer.write(H_JSON)
+            writer.write(b"Content-Length: %d\r\n\r\n" % len(body))
+            if method == b"GET":
+                writer.write(body)
         else:
-            await send(writer, "404 Not Found", "text/plain; charset=utf-8", "No encontrado")
+            writer.write(R_404)
+        await writer.drain()
     except Exception as e:
-        print("error en petición:", repr(e))
+        print("petición:", repr(e))
     finally:
+        conns -= 1
         try:
             writer.close()
             await writer.wait_closed()
@@ -174,32 +189,116 @@ async def handle(reader, writer):
             pass
 
 
-async def keep_wifi():
-    """Reconecta si se cae el Wi-Fi."""
+async def housekeeper():
+    """Limpia memoria, vigila el Wi-Fi y reinicia si la RAM se agota."""
+    global mem_min
+    n = 0
     while True:
-        await asyncio.sleep(15)
-        if state["mode"] == "wifi" and not wlan.isconnected():
-            print("Wi-Fi caído, reconectando…")
+        await asyncio.sleep(10)
+        gc.collect()
+        free = gc.mem_free()
+        if free < mem_min:
+            mem_min = free
+        if free < LOW_MEM:
+            print("memoria baja (%d), reiniciando" % free)
+            machine.reset()
+        n += 1
+        if n % 2 == 0 and mode == "wifi" and not wlan.isconnected():
+            print("Wi-Fi caído, reconectando")
             try:
                 wlan.disconnect()
                 wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
             except Exception as e:
-                print("reconexión falló:", repr(e))
+                print("reconexión:", repr(e))
+
+
+def fetch_update():
+    """Consulta GitHub y, si hay commit nuevo, descarga la página. Devuelve True si cambió."""
+    import requests
+    repo = config.GITHUB_REPO
+    ua = {"User-Agent": "esp32-panel", "Accept": "application/vnd.github.sha"}
+    r = requests.get("https://api.github.com/repos/%s/commits/%s" % (repo, config.GITHUB_BRANCH),
+                     headers=ua, timeout=10)
+    try:
+        if r.status_code != 200:
+            print("GitHub respondió", r.status_code)
+            return False
+        sha = r.raw.read(40).decode()
+    finally:
+        r.close()
+    if len(sha) != 40 or sha == read_text(SHA_FILE):
+        return False
+
+    gc.collect()
+    r = requests.get("https://raw.githubusercontent.com/%s/%s/%s" % (repo, sha, config.GITHUB_PAGE),
+                     headers={"User-Agent": "esp32-panel", "Accept-Encoding": "gzip"}, timeout=10)
+    try:
+        if r.status_code != 200:
+            print("descarga respondió", r.status_code)
+            return False
+        if r.headers.get("Content-Encoding", "") != "gzip":
+            print("la descarga no llegó comprimida; se conserva la página actual")
+            return False
+        total = 0
+        with open(PAGE_TMP, "wb") as f:
+            while True:
+                n = r.raw.readinto(BUF)
+                if not n:
+                    break
+                total += n
+                if total > MAX_PAGE:
+                    raise ValueError("página demasiado grande")
+                f.write(MV[:n])
+    finally:
+        r.close()
+    if total < 20:
+        return False
+    with open(PAGE_TMP, "rb") as f:
+        if f.read(2) != b"\x1f\x8b":      # firma gzip
+            return False
+    os.rename(PAGE_TMP, PAGE_GZ)
+    with open(SHA_FILE, "w") as f:
+        f.write(sha)
+    print("página actualizada a", sha[:12], "(%d bytes)" % total)
+    return True
+
+
+async def updater():
+    await asyncio.sleep(20)
+    while True:
+        if wlan.isconnected() and gc.mem_free() > 50000:
+            gc.collect()
+            async with send_lock:          # no se sirve la página mientras se reemplaza
+                try:
+                    led.value(1)
+                    if fetch_update():
+                        load_page_info()
+                except Exception as e:
+                    print("actualización:", repr(e))
+                finally:
+                    led.value(0)
+            gc.collect()
+        await asyncio.sleep(config.UPDATE_EVERY_S)
 
 
 async def main():
-    global wlan
-    wlan, state["mode"] = connect()
+    global wlan, mode
+    wlan, mode = connect()
     led.value(0)
+    load_page_info()
+    gc.collect()
+    gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
     ip = wlan.ifconfig()[0]
-    if state["mode"] == "wifi":
-        print("Conectado a '%s'. Panel: http://%s/  (o http://%s.local/)"
-              % (state["ssid"], ip, config.HOSTNAME))
+    if mode == "wifi":
+        print("Conectado a '%s'. Sitio: http://%s/  (o http://%s.local/)"
+              % (config.WIFI_SSID, ip, config.HOSTNAME))
     else:
-        print("Modo punto de acceso. Red: '%s'. Panel: http://%s/"
-              % (state["ssid"], ip))
-    await asyncio.start_server(handle, "0.0.0.0", 80, backlog=4)
-    asyncio.create_task(keep_wifi())
+        print("Modo punto de acceso '%s'. Sitio: http://%s/" % (config.AP_SSID, ip))
+    print("memoria libre al arrancar:", gc.mem_free())
+    await asyncio.start_server(handle, "0.0.0.0", 80, backlog=MAX_CONN)
+    asyncio.create_task(housekeeper())
+    if mode == "wifi" and config.GITHUB_REPO:
+        asyncio.create_task(updater())
     while True:
         await asyncio.sleep(3600)
 
