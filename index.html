@@ -19,31 +19,29 @@ body{
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
 button{font-family:inherit}
+#ascii{
+  position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;pointer-events:none;
+  -webkit-mask-image:radial-gradient(ellipse 62% 52% at 50% 50%,rgba(0,0,0,.16) 0,rgba(0,0,0,.16) 38%,#000 100%);
+  mask-image:radial-gradient(ellipse 62% 52% at 50% 50%,rgba(0,0,0,.16) 0,rgba(0,0,0,.16) 38%,#000 100%);
+}
 .esp{
+  position:relative;z-index:1;
   min-height:100vh;min-height:100dvh;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;padding:40px 20px 56px;
 }
 .esp h1{
   margin:0;font-size:clamp(3.2rem,15vw,8rem);line-height:.95;font-weight:700;letter-spacing:-.055em;
-}
-.lead{
-  margin:28px 0 0;max-width:19ch;font-size:clamp(1.35rem,5.2vw,2.25rem);line-height:1.18;
-  font-weight:700;letter-spacing:-.03em;text-wrap:balance;
-}
-.type{margin:26px 0 0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:400}
-.call{margin:6px 0 0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:700}
-.call span{
-  background:linear-gradient(#000,#000) no-repeat 0 100%/100% 2px;padding-bottom:3px;
+  text-shadow:0 0 6px #fff,0 0 22px #fff,0 0 44px #fff;
 }
 .cta{
   margin-top:36px;display:inline-flex;align-items:center;gap:.55em;
-  padding:15px 28px;border:2px solid #000;border-radius:999px;
+  padding:15px 28px;border:2px solid #000;border-radius:999px;background:#fff;
   color:#000;text-decoration:none;font-size:1.0625rem;font-weight:700;letter-spacing:-.01em;
 }
 .cta:hover,.cta:focus-visible{background:#000;color:#fff}
 .cta:focus-visible{outline:3px solid #000;outline-offset:4px}
-.blink{margin-top:44px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.blink{margin-top:44px;display:flex;flex-direction:column;align-items:center;gap:16px}
 .red{
   position:relative;width:84px;height:84px;padding:0;border:0;border-radius:50%;cursor:pointer;
   background:radial-gradient(circle at 34% 28%,#ff7a6e 0,#e5231f 46%,#b80f0f 100%);
@@ -59,7 +57,7 @@ button{font-family:inherit}
 .red.on::after{animation:ring .7s ease-out 3}
 .red.on{animation:flash .22s steps(1) 8}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.blink-text{margin:0;font-size:.95rem;line-height:1.4;font-weight:400;min-height:1.4em}
+.blink-text{margin:0;font-size:.95rem;line-height:1.4;font-weight:700;min-height:1.4em;text-shadow:0 0 6px #fff,0 0 14px #fff}
 @keyframes ring{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.7)}}
 @keyframes flash{50%{filter:brightness(1.45)}}
 @media (prefers-reduced-motion:reduce){
@@ -67,16 +65,20 @@ button{font-family:inherit}
 }
 </style><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
 <body>
-  <main class="esp">
+  <canvas id="ascii" aria-hidden="true"></canvas>
+<main class="esp">
   <h1>Stronglify</h1>
   <a class="cta" href="https://app.stronglify.com">Ir a la aplicación <span aria-hidden="true">→</span></a>
   <div class="blink">
     <button class="red" id="blink" type="button" aria-describedby="blink-text"><span class="sr">Hacer titilar la placa</span></button>
-    <p class="blink-text" id="blink-text" aria-live="polite" data-idle="Presiona el botón rojo y haz titilar la placa" data-ok="¡La placa está titilando!" data-fail="La placa no respondió">Presiona el botón rojo y haz titilar la placa</p>
+    <p class="blink-text" id="blink-text" aria-live="polite" data-idle="" data-ok="¡La placa está titilando!" data-fail="La placa no respondió"></p>
   </div>
 </main><script>
 (function () {
-  var d = document, btn = d.getElementById('blink'), msg = d.getElementById('blink-text'), timer;
+  var d = document;
+
+  
+  var btn = d.getElementById('blink'), msg = d.getElementById('blink-text'), timer;
   function say(key, on) {
     msg.textContent = msg.getAttribute('data-' + key);
     btn.classList.toggle('on', !!on);
@@ -85,6 +87,7 @@ button{font-family:inherit}
     if (btn.disabled) return;
     btn.disabled = true;
     clearTimeout(timer);
+    splash = 1;
     fetch('/api/blink', { method: 'POST' })
       .then(function (r) { say(r.ok ? 'ok' : 'fail', r.ok); })
       .catch(function () { say('fail', false); })
@@ -92,6 +95,71 @@ button{font-family:inherit}
         timer = setTimeout(function () { say('idle', false); btn.disabled = false; }, 2200);
       });
   });
+
+  
+  var cv = d.getElementById('ascii'), cx = cv.getContext('2d');
+  var RAMP = ' ..,:;-~=+*xX#%@', NR = RAMP.length - 1;
+  var CW = 9, CH = 16, cols = 0, rows = 0, dpr = 1;
+  var mx = -9, my = -9, tx = -9, ty = -9, splash = 0, last = 0, running = true;
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = window.innerWidth, h = window.innerHeight;
+    if (w < 600) { CW = 8; CH = 14; } else { CW = 9; CH = 16; }
+    cols = Math.ceil(w / CW) + 1;
+    rows = Math.ceil(h / CH) + 1;
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx.font = (CH - 2) + 'px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    cx.textBaseline = 'top';
+    cx.fillStyle = '#000';
+  }
+
+  function draw(ms) {
+    var t = ms * 0.001, sin = Math.sin, cos = Math.cos;
+    mx += (tx - mx) * 0.08; my += (ty - my) * 0.08;
+    splash *= 0.965;
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (var y = 0; y < rows; y++) {
+      var v = y * 0.115, line = '';
+      for (var x = 0; x < cols; x++) {
+        var u = x * 0.062;
+        
+        var a = sin(v * 1.3 + t * 0.7) + cos(u * 0.9 - t * 0.5);
+        var b = sin(u * 1.1 + a + t * 0.4)
+              + sin(v * 1.7 - a * 1.3 + t * 0.6)
+              + sin((u + v) * 0.6 + t * 0.9 + sin(a + t * 0.3) * 1.4);
+        var dx = (x - mx) * 0.55, dy = y - my, dist = Math.sqrt(dx * dx + dy * dy);
+        b += 1.6 * Math.exp(-dist * dist * 0.012) * sin(dist * 0.9 - t * 5);
+        if (splash > 0.02) {
+          var ex = (x - cols / 2) * 0.55, ey = y - rows / 2, r = Math.sqrt(ex * ex + ey * ey);
+          b += splash * 2.2 * sin(r * 0.5 - t * 9);
+        }
+        var n = (b + 3) / 6;
+        n = n < 0 ? 0 : n > 1 ? 1 : n;
+        line += RAMP.charAt((n * n * NR + 0.5) | 0);
+      }
+      cx.fillText(line, 0, y * CH);
+    }
+  }
+
+  function loop(ms) {
+    if (!running) return;
+    if (ms - last > 30) { last = ms; draw(ms); }
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', function () { resize(); if (still) draw(4000); });
+  window.addEventListener('pointermove', function (e) { tx = e.clientX / CW; ty = e.clientY / CH; }, { passive: true });
+  d.addEventListener('visibilitychange', function () {
+    running = !d.hidden && !still;
+    if (running) requestAnimationFrame(loop);
+  });
+
+  resize();
+  if (still) { running = false; draw(4000); } else { requestAnimationFrame(loop); }
 })();
 </script>
 </body></html>
