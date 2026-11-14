@@ -31,7 +31,7 @@ button{font-family:inherit}
   margin:28px 0 0;max-width:19ch;font-size:clamp(1.35rem,5.2vw,2.25rem);line-height:1.18;
   font-weight:700;letter-spacing:-.03em;text-wrap:balance;
 }
-.type{margin:26px 0 0;min-height:1.5em;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:400}
+.type{margin:26px 0 0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:400}
 .call{margin:6px 0 0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.5;font-weight:700}
 .call span{
   background:linear-gradient(#000,#000) no-repeat 0 100%/100% 2px;padding-bottom:3px;
@@ -40,17 +40,9 @@ button{font-family:inherit}
   margin-top:36px;display:inline-flex;align-items:center;gap:.55em;
   padding:15px 28px;border:2px solid #000;border-radius:999px;
   color:#000;text-decoration:none;font-size:1.0625rem;font-weight:700;letter-spacing:-.01em;
-  background:linear-gradient(#000,#000) no-repeat 50% 100%/100% 0;
-  transition:background-size .28s cubic-bezier(.2,.7,.2,1),color .2s;
 }
-.cta:hover,.cta:focus-visible{background-size:100% 100%;color:#fff}
+.cta:hover,.cta:focus-visible{background:#000;color:#fff}
 .cta:focus-visible{outline:3px solid #000;outline-offset:4px}
-.arrow{display:inline-block;animation:nudge 1.6s ease-in-out infinite}
-.caret{
-  display:inline-block;width:2px;height:1.05em;margin-left:3px;background:#000;
-  vertical-align:-.16em;animation:blink 1s steps(1) infinite;
-}
-.ch,.wd{display:inline-block;white-space:pre}
 .blink{margin-top:44px;display:flex;flex-direction:column;align-items:center;gap:18px}
 .red{
   position:relative;width:84px;height:84px;padding:0;border:0;border-radius:50%;cursor:pointer;
@@ -62,71 +54,32 @@ button{font-family:inherit}
 .red::after{
   content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid #e5231f;opacity:0;pointer-events:none;
 }
-.red:active,.red.down{transform:translateY(6px);box-shadow:0 1px 0 #8a0a0a,0 5px 10px rgba(229,35,31,.3)}
+.red:active{transform:translateY(6px);box-shadow:0 1px 0 #8a0a0a,0 5px 10px rgba(229,35,31,.3)}
 .red:focus-visible{outline:3px solid #000;outline-offset:6px}
 .red.on::after{animation:ring .7s ease-out 3}
 .red.on{animation:flash .22s steps(1) 8}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .blink-text{margin:0;font-size:.95rem;line-height:1.4;font-weight:400;min-height:1.4em}
-.js .ch{
-  opacity:0;
-  animation:rise .8s cubic-bezier(.2,.75,.2,1) both,wave 5s ease-in-out infinite;
-  animation-delay:calc(var(--i)*60ms),calc(1.6s + var(--i)*90ms);
-}
-.js .wd{opacity:0;animation:word .6s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(.75s + var(--i)*75ms)}
-.js .call{opacity:0;animation:fade .5s ease both;animation-delay:3.7s}
-.js .call span{background-size:0 2px;animation:underline .7s cubic-bezier(.2,.75,.2,1) both;animation-delay:4s}
-.js .cta{opacity:0;animation:word .6s cubic-bezier(.2,.75,.2,1) both;animation-delay:4.4s}
-.js .blink{opacity:0;animation:word .6s cubic-bezier(.2,.75,.2,1) both;animation-delay:4.9s}
-@keyframes rise{
-  from{opacity:0;transform:translateY(.55em) rotate(7deg);filter:blur(8px)}
-  to{opacity:1;transform:none;filter:blur(0)}
-}
-@keyframes wave{0%,16%,100%{translate:0 0}8%{translate:0 -.07em}}
-@keyframes word{from{opacity:0;transform:translateY(.5em)}to{opacity:1;transform:none}}
-@keyframes fade{to{opacity:1}}
-@keyframes underline{to{background-size:100% 2px}}
-@keyframes blink{50%{opacity:0}}
-@keyframes nudge{0%,100%{transform:none}50%{transform:translateX(5px)}}
 @keyframes ring{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.7)}}
 @keyframes flash{50%{filter:brightness(1.45)}}
 @media (prefers-reduced-motion:reduce){
-  .js .ch,.js .wd,.js .call,.js .call span,.js .cta,.js .blink,.arrow,.caret,.red.on,.red.on::after{animation:none;opacity:1}
-  .js .call span{background-size:100% 2px}
+  .red.on,.red.on::after{animation:none}
 }
 </style><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
 <body>
   <main class="esp">
-  <h1 id="brand">Stronglify</h1>
-  <p class="lead" id="lead">Genera páginas estáticas perfectas para SEO de manera masiva.</p>
-  <p class="type"><span id="type">Construye tu página web en minutos.</span><span class="caret" aria-hidden="true"></span></p>
+  <h1>Stronglify</h1>
+  <p class="lead">Genera páginas estáticas perfectas para SEO de manera masiva.</p>
+  <p class="type">Construye tu página web en minutos.</p>
   <p class="call"><span>¡Regístrate y comienza a crear!</span></p>
-  <a class="cta" href="https://app.stronglify.com">Ir a la aplicación <span class="arrow" aria-hidden="true">→</span></a>
+  <a class="cta" href="https://app.stronglify.com">Ir a la aplicación <span aria-hidden="true">→</span></a>
   <div class="blink">
     <button class="red" id="blink" type="button" aria-describedby="blink-text"><span class="sr">Hacer titilar la placa</span></button>
     <p class="blink-text" id="blink-text" aria-live="polite" data-idle="Presiona el botón rojo y haz titilar la placa" data-ok="¡La placa está titilando!" data-fail="La placa no respondió">Presiona el botón rojo y haz titilar la placa</p>
   </div>
 </main><script>
 (function () {
-  var d = document, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  d.documentElement.className = 'js';
-  function split(el, byWord) {
-    var text = el.textContent, parts = byWord ? text.split(' ') : text.split('');
-    el.setAttribute('aria-label', text);
-    el.textContent = '';
-    parts.forEach(function (p, i) {
-      var s = d.createElement('span');
-      s.className = byWord ? 'wd' : 'ch';
-      s.setAttribute('aria-hidden', 'true');
-      s.style.setProperty('--i', i);
-      s.textContent = byWord && i < parts.length - 1 ? p + ' ' : p;
-      el.appendChild(s);
-    });
-  }
-  split(d.getElementById('brand'), false);
-  split(d.getElementById('lead'), true);
-
-  var btn = d.getElementById('blink'), msg = d.getElementById('blink-text'), timer;
+  var d = document, btn = d.getElementById('blink'), msg = d.getElementById('blink-text'), timer;
   function say(key, on) {
     msg.textContent = msg.getAttribute('data-' + key);
     btn.classList.toggle('on', !!on);
@@ -142,15 +95,6 @@ button{font-family:inherit}
         timer = setTimeout(function () { say('idle', false); btn.disabled = false; }, 2200);
       });
   });
-
-  var t = d.getElementById('type'), full = t.textContent, n = 0;
-  if (still) return;
-  t.setAttribute('aria-label', full);
-  t.textContent = '';
-  setTimeout(function tick() {
-    t.textContent = full.slice(0, ++n);
-    if (n < full.length) setTimeout(tick, 34 + Math.random() * 40);
-  }, 2100);
 })();
 </script>
 </body></html>
