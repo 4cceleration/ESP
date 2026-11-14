@@ -34,27 +34,31 @@ Con ESP-AT, los comandos AT **no** van por el USB: se atienden en UART1
 | `ota_0` | `0x100000` | 1.5 MB |
 | `ota_1` | `0x280000` | 1.5 MB |
 
-## Panel web (estado actual de la placa)
+## Sitio web (estado actual de la placa)
 
-La placa corre **MicroPython v1.29.0** con un panel web propio (`device/`):
-estado en vivo (tiempo encendida, temperatura, memoria, señal Wi-Fi) y un
-interruptor para el LED integrado.
+La placa corre **MicroPython v1.29.0** y sirve una página estática en
+`http://esp32-panel.local/` (Wi-Fi de `device/config.py`, solo 2.4 GHz).
 
-- `device/main.py`: servidor HTTP (`/`, `/api/status`, `POST /api/led`).
-- `device/www/index.html`: la página.
-- `device/config.py`: Wi-Fi y red propia. Contiene contraseñas; no compartir.
+Flujo de publicación:
 
-Se conecta al Wi-Fi de `config.py` (solo 2.4 GHz) y queda en
-`http://esp32-panel.local/`. Si no hay Wi-Fi configurado o no conecta, crea la
-red `ESP32-Panel` (clave `AP_PASSWORD` de `config.py`) y sirve en `http://192.168.4.1/`.
+1. La página se edita en **Stronglify** (tema `ESP`, sitio `tudominio.com`).
+2. Al publicar, Stronglify hace push de `index.html` a la raíz de `4cceleration/ESP`.
+3. La placa consulta GitHub cada 5 minutos; si hay un commit nuevo descarga
+   `index.html` comprimido y lo empieza a servir, sin reiniciarse.
+
+Los push al repositorio se hacen solo desde Stronglify.
+
+`device/main.py` está escrito para gastar poca RAM: página guardada en gzip, un
+único búfer de 1 KB, cabeceras constantes, límites por petición (2 KB, 4 s,
+4 conexiones), solo GET/HEAD con rutas fijas y un vigilante que recoge basura y
+reinicia la placa si la memoria baja de 24 KB. `GET /api/status` devuelve memoria
+libre, mínimo histórico, peticiones y versión servida.
 
 ```sh
-scripts/esp.sh upload     # sube config.py, main.py y www/ y muestra el log con la IP
-scripts/esp.sh preview    # vista previa en el computador con datos simulados
+scripts/esp.sh upload     # sube config.py, main.py y la página local; muestra el log
+scripts/esp.sh preview    # vista previa de site/index.html en http://localhost:8032/
 scripts/esp.sh repl       # consola MicroPython
 ```
-
-El panel no tiene contraseña: cualquiera en la misma red puede verlo y mover el LED.
 
 Para volver al firmware de fábrica (ESP-AT): `scripts/esp.sh restore`.
 
@@ -64,6 +68,8 @@ Para volver al firmware de fábrica (ESP-AT): `scripts/esp.sh restore`.
 backup/   factory-esp-at-2.4.0-4MB.bin  volcado completo del flash de fábrica + SHA256SUMS
 docs/     chip-info.txt, efuses.txt, boot-log.txt  salidas originales de las lecturas
 scripts/  esp.sh (atajos), monitor.py (monitor serie sin dependencias)
+device/   main.py (servidor), config.py (Wi-Fi y repo; privado)
+site/     index.html (copia local de la página publicada)
 ```
 
 ## Uso
