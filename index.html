@@ -67,7 +67,7 @@ button{font-family:inherit}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&#39;http://www.w3.org/2000/svg&#39; viewBox=&#39;0 0 32 32&#39;%3E%3Ccircle cx=&#39;16&#39; cy=&#39;17&#39; r=&#39;13&#39; fill=&#39;%238a0a0a&#39;/%3E%3Ccircle cx=&#39;16&#39; cy=&#39;15&#39; r=&#39;13&#39; fill=&#39;%23e5231f&#39;/%3E%3Ccircle cx=&#39;12&#39; cy=&#39;10&#39; r=&#39;4&#39; fill=&#39;%23ff7a6e&#39;/%3E%3C/svg%3E"/></head>
 <body>
   <canvas id="ascii" aria-hidden="true"></canvas>
-<p style="position:fixed;top:0;left:0;right:0;z-index:2;margin:0;padding:13px 16px;text-align:center;font-size:.9rem;line-height:1.35;font-weight:700;background:#fff;border-bottom:2px solid #000">Funcionando en un ESP32 · Push desde Stronglify · <a href="https://github.com/4cceleration/ESP" style="color:inherit;text-underline-offset:3px">Ver el repositorio</a></p>
+<p style="position:fixed;top:0;left:0;right:0;z-index:2;margin:0;padding:13px 16px;text-align:center;font-size:.9rem;line-height:1.35;font-weight:700;background:#fff;border-bottom:2px solid #000">Funcionando en un ESP32 · Generado con Stronglify · <a href="https://github.com/4cceleration/ESP" style="color:inherit;text-underline-offset:3px">Ver el repositorio</a></p>
 <main class="esp">
   <h1><a href="https://app.stronglify.com" style="color:inherit;text-decoration:none">Stronglify</a></h1>
   <div class="blink">
@@ -105,33 +105,28 @@ button{font-family:inherit}
     ' .-/\\|X#',
     ' .:=+*#%@',
     '  01',
-    ' _.-~^*#'
+    ' _.-~^*#',
+    ' .:|!I#',
+    ' .()[]{}#',
+    ' .<>^v*@',
+    ' `,;!i*%#'
   ];
-  var SCENE_S = 7, FADE_S = 2.5, NS = 6;
+  var SEG_S = 5, NS = 10;
   var CW = 9, CH = 16, cols = 0, rows = 0, dpr = 1;
   var mx = -9, my = -9, tx = -9, ty = -9, splash = 0, last = 0, running = true;
   var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, atan2 = Math.atan2;
-
-  function hash(n) {
-    n = Math.imul(n + 7, 0x9E3779B1) >>> 0;
-    return ((n ^ (n >>> 13)) >>> 0) % NS;
-  }
-  function pick(k) {            
-    var a = hash(k), b = hash(k - 1);
-    return a === b ? (a + 1) % NS : a;
-  }
+  var sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, atan2 = Math.atan2, log = Math.log;
 
   function scene(i, X, Y, t) {  
-    var r, a, w;
+    var r, a, w, p, q;
     switch (i) {
       case 0:                   
         w = sin(Y * 1.3 + t * 0.7) + cos(X * 0.9 - t * 0.5);
         return (sin(X * 1.1 + w + t * 0.4) + sin(Y * 1.7 - w * 1.3 + t * 0.6)
               + sin((X + Y) * 0.6 + t * 0.9 + sin(w + t * 0.3) * 1.4)) / 3;
       case 1:                   
-        r = sqrt((X - 2.2 * sin(t * 0.5)) * (X - 2.2 * sin(t * 0.5)) + (Y - 1.4 * cos(t * 0.4)) * (Y - 1.4 * cos(t * 0.4)));
-        a = sqrt((X + 2.6 * cos(t * 0.3)) * (X + 2.6 * cos(t * 0.3)) + (Y + 1.6 * sin(t * 0.6)) * (Y + 1.6 * sin(t * 0.6)));
+        p = X - 2.2 * sin(t * 0.5); q = Y - 1.4 * cos(t * 0.4); r = sqrt(p * p + q * q);
+        p = X + 2.6 * cos(t * 0.3); q = Y + 1.6 * sin(t * 0.6); a = sqrt(p * p + q * q);
         return (sin(r * 3.2 - t * 3.4) + sin(a * 2.5 - t * 2.3)) / 2;
       case 2:                   
         r = sqrt(X * X + Y * Y); a = atan2(Y, X);
@@ -141,9 +136,20 @@ button{font-family:inherit}
       case 4:                   
         r = sqrt(X * X + Y * Y);
         return (sin(X * 3.1 + t * 1.2) * sin(Y * 3.1 - t * 1.5) + sin(r * 3.6 - t * 3) * 0.6) / 1.4;
-      default:                  
+      case 5:                   
         r = sqrt(X * X + Y * Y) + 0.18; a = atan2(Y, X);
         return sin(2.2 / r + a * 2 + t * 2.4) * cos(a * 4 - t * 1.3 + r);
+      case 6:                   
+        return sin(X * 8.5 + sin(Y * 0.7 + t) * 1.6) * sin(Y * 2.3 - t * 4.5 + sin(X * 5.1) * 3);
+      case 7:                   
+        return sin((X * X + Y * Y) * 1.15 - t * 3.2) * cos(X * 0.8 + t * 0.6);
+      case 8:                   
+        r = sqrt(X * X + Y * Y) + 0.2; a = atan2(Y, X);
+        return sin(a * 2 - log(r) * 5.5 + t * 1.9) * (0.55 + 0.45 * sin(r * 2.1 - t * 1.2));
+      default:                  
+        return (sin(X * 1.7 + t) * cos(Y * 2.3 - t * 1.2)
+              + 0.5 * sin(X * 4.1 - t * 1.7) * cos(Y * 3.7 + t * 1.4)
+              + 0.25 * sin(X * 8.3 + t * 2.3) * cos(Y * 7.9 - t * 2)) / 1.4;
     }
   }
 
@@ -164,10 +170,9 @@ button{font-family:inherit}
   function draw(ms) {
     var real = ms * 0.001;
     var t = real + 1.3 * sin(real * 0.37);           
-    var k = Math.floor(real / SCENE_S), f = real - k * SCENE_S;
-    var sa = pick(k), sb = pick(k + 1);
-    var mix = f > SCENE_S - FADE_S ? (f - (SCENE_S - FADE_S)) / FADE_S : 0;
-    mix = mix * mix * (3 - 2 * mix);
+    var k = Math.floor(real / SEG_S), f = real / SEG_S - k;
+    var sa = k % NS, sb = (k + 1) % NS;
+    var mix = f * f * (3 - 2 * f);                   
     var ra = RAMPS[sa], rb = RAMPS[sb];
     var zoom = 1 + 0.4 * sin(real * 0.23), rot = real * 0.06 + 0.5 * sin(real * 0.11);
     var cr = cos(rot) * zoom, sr = sin(rot) * zoom;
@@ -183,7 +188,7 @@ button{font-family:inherit}
         var px = (x - hx) * 0.062;
         var X = px * cr - py * sr, Y = px * sr + py * cr;
         var b = scene(sa, X, Y, t);
-        if (mix > 0) b += (scene(sb, X, Y, t) - b) * mix;
+        b += (scene(sb, X, Y, t) - b) * mix;
 
         var dx = (x - mx) * 0.55, dy = y - my, dist = sqrt(dx * dx + dy * dy);
         b += 0.6 * Math.exp(-dist * dist * 0.012) * sin(dist * 0.9 - t * 5);
