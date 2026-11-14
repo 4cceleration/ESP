@@ -182,15 +182,18 @@ button{font-family:inherit}
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = window.innerWidth, h = window.innerHeight;
-    if (w < 600) { CW = 8; CH = 14; } else { CW = 9; CH = 16; }
-    cols = Math.ceil(w / CW) + 1;
-    rows = Math.ceil(h / CH) + 1;
+    CH = w < 600 ? 14 : 16;
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cx.font = (CH - 2) + 'px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
     cx.textBaseline = 'top';
     cx.fillStyle = '#000';
+    
+    
+    CW = cx.measureText('0000000000').width / 10 || (CH - 2) * 0.6;
+    cols = Math.ceil(w / CW) + 2;
+    rows = Math.ceil(h / CH) + 1;
   }
 
   function draw(ms) {
@@ -203,23 +206,24 @@ button{font-family:inherit}
     var zoom = 1 + 0.4 * sin(real * 0.23), rot = real * 0.06 + 0.5 * sin(real * 0.11);
     var cr = cos(rot) * zoom, sr = sin(rot) * zoom;
     var hx = cols / 2, hy = rows / 2;
+    var kx = 0.0069 * CW, ky = 0.0072 * CH, asp = CW / CH;   
 
     mx += (tx - mx) * 0.08; my += (ty - my) * 0.08;
     splash *= 0.965;
     cx.clearRect(0, 0, cv.width, cv.height);
 
     for (var y = 0; y < rows; y++) {
-      var py = (y - hy) * 0.115, line = '';
+      var py = (y - hy) * ky, line = '';
       for (var x = 0; x < cols; x++) {
-        var px = (x - hx) * 0.062;
+        var px = (x - hx) * kx;
         var X = px * cr - py * sr, Y = px * sr + py * cr;
         var b = scene(sa, X, Y, t);
         b += (scene(sb, X, Y, t) - b) * mix;
 
-        var dx = (x - mx) * 0.55, dy = y - my, dist = sqrt(dx * dx + dy * dy);
+        var dx = (x - mx) * asp, dy = y - my, dist = sqrt(dx * dx + dy * dy);
         b += 0.6 * Math.exp(-dist * dist * 0.012) * sin(dist * 0.9 - t * 5);
         if (splash > 0.02) {
-          var ex = (x - hx) * 0.55, ey = y - hy;
+          var ex = (x - hx) * asp, ey = y - hy;
           b += splash * 0.8 * sin(sqrt(ex * ex + ey * ey) * 0.5 - real * 9);
         }
 
