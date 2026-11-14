@@ -1,6 +1,7 @@
 {
   // Relevo público del ESP32: la placa se conecta aquí por WebSocket y las visitas le llegan por esa conexión.
   "name": "esp",
+  "account_id": "7b7146efd6997fca14afcf6984fb3b7f",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
